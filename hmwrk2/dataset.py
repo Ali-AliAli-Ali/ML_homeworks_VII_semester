@@ -1,5 +1,7 @@
 import os
 import torch
+import sklearn
+from sklearn.model_selection import train_test_split
 from typing import Union, List, Tuple
 from sentencepiece import SentencePieceTrainer, SentencePieceProcessor
 from torch.utils.data import Dataset
@@ -11,7 +13,7 @@ class TextDataset(Dataset):
 
     def __init__(self, data_file: str, train: bool = True, sp_model_prefix: str = None,
                  vocab_size: int = 2000, normalization_rule_name: str = 'nmt_nfkc_cf',
-                 model_type: str = 'bpe', max_length: int = 128):
+                 model_type: str = 'bpe', max_length: int = 312):
         """
         Dataset with texts, supporting BPE tokenizer
         :param data_file: txt file containing texts
@@ -32,7 +34,7 @@ class TextDataset(Dataset):
         # load tokenizer from file
         self.sp_model = SentencePieceProcessor(model_file=sp_model_prefix + '.model')
 
-        with open(data_file) as file:
+        with open(data_file, encoding='utf-8') as file:
             texts = file.readlines()
 
         """
@@ -40,7 +42,9 @@ class TextDataset(Dataset):
         Split texts to train and validation fixing self.TRAIN_VAL_RANDOM_SEED
         The validation ratio is self.VAL_RATIO
         """
-        train_texts, val_texts = None, None
+        train_texts, val_texts = train_test_split(texts, 
+                                                  test_size=self.VAL_RATIO,
+                                                  random_state=self.TRAIN_VAL_RANDOM_SEED)
         self.texts = train_texts if train else val_texts
         self.indices = self.sp_model.encode(self.texts)
 
@@ -83,9 +87,7 @@ class TextDataset(Dataset):
         :param item: text id
         :return: encoded text indices and its actual length (including BOS and EOS specials)
         """
-        # These are placeholders, you may remove them.
-        indices = torch.randint(high=self.vocab_size, size=(self.max_length, ))
-        length = torch.randint(low=1, high=self.max_length + 1, size=()).item()
+
         """
         YOUR CODE HERE (⊃｡•́‿•̀｡)⊃━✿✿✿✿✿✿
         Take corresponding index array from self.indices,
@@ -93,4 +95,11 @@ class TextDataset(Dataset):
         pad to self.max_length using self.pad_id.
         Return padded indices of size (max_length, ) and its actual length
         """
+        length = len(self.indices[item]) + 2
+        pad_len = self.max_length - length
+        indices = torch.cat((torch.tensor(self.bos_id).view(1), 
+                             torch.tensor(self.indices[item]), 
+                             torch.tensor(self.eos_id).view(1),
+                             torch.tensor([self.pad_id] * pad_len))).long()
+        
         return indices, length

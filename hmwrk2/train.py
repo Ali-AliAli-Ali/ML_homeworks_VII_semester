@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 from typing import List, Optional, Any
@@ -29,7 +30,7 @@ def plot_losses(train_losses: List[float], val_losses: List[float]):
     YOUR CODE HERE (⊃｡•́‿•̀｡)⊃━✿✿✿✿✿✿
     Calculate train and validation perplexities given lists of losses
     """
-    train_perplexities, val_perplexities = [], []
+    train_perplexities, val_perplexities = np.exp(train_losses), np.exp(val_losses)
 
     axs[1].plot(range(1, len(train_perplexities) + 1), train_perplexities, label='train')
     axs[1].plot(range(1, len(val_perplexities) + 1), val_perplexities, label='val')
@@ -54,6 +55,7 @@ def training_epoch(model: LanguageModel, optimizer: torch.optim.Optimizer, crite
     :return: running train loss
     """
     device = next(model.parameters()).device
+    model.to(device)
     train_loss = 0.0
 
     model.train()
@@ -64,6 +66,15 @@ def training_epoch(model: LanguageModel, optimizer: torch.optim.Optimizer, crite
         call backward and make one optimizer step.
         Accumulate sum of losses for different batches in train_loss
         """
+        indices, lengths = indices[:, :lengths.max()].to(device), lengths.to(device)
+
+        logits = model(indices[:, :-1], lengths - 1)
+        loss = criterion(logits.transpose(1, 2), indices[:, 1:])        
+        train_loss += loss.item() * indices.shape[0]
+
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
 
     train_loss /= len(loader.dataset)
     return train_loss
@@ -81,6 +92,7 @@ def validation_epoch(model: LanguageModel, criterion: nn.Module,
     :return: validation loss
     """
     device = next(model.parameters()).device
+    model.to(device)
     val_loss = 0.0
 
     model.eval()
@@ -90,6 +102,12 @@ def validation_epoch(model: LanguageModel, criterion: nn.Module,
         Process one validation step: calculate loss.
         Accumulate sum of losses for different batches in val_loss
         """
+        indices = indices[:, :lengths.max()].to(device)
+        lengths = lengths.to(device)
+        
+        logits = model(indices[:, :-1], lengths - 1)
+        loss = criterion(logits.transpose(1, 2), indices[:, 1:])
+        val_loss += loss.item() * indices.shape[0]
 
     val_loss /= len(loader.dataset)
     return val_loss
